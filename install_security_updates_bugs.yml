@@ -1,0 +1,76 @@
+[ansible.FAccount@scclhubansb01 Server_Patching]$ cat install_security_updates_bugs.yml
+---
+- name: Install critical security patches and notify if reboot required
+  hosts: 10.38.132.219
+  remote_user: ansible.FAccount
+  become: true
+  become_method: sudo
+  become_user: root
+  gather_facts: yes
+  tasks:
+
+    - name: Check for available security updates
+      shell: yum list updates --security
+      register: security_updates
+      changed_when: false
+      failed_when: false
+      async: 300  # Run this task for up to 5 minutes
+      poll: 0      # Don't wait for completion (fire and forget)
+      ignore_errors: true
+
+    - name: Wait for security updates check to complete
+      async_status:
+        jid: "{{ security_updates.ansible_job_id }}"
+      register: job_result
+      retries: 3
+      delay: 10
+      until: job_result.finished
+      when: security_updates.ansible_job_id is defined
+
+    - name: Show available security updates
+      debug:
+        var: security_updates.stdout_lines
+      when: security_updates.stdout_lines is defined
+
+    - name: Check if there are any security updates
+      set_fact:
+        security_updates_needed: "{{ security_updates.stdout | length > 0 }}"
+      when: security_updates.stdout_lines is defined
+
+    - name: Install security updates
+      shell: yum update --security -y
+      when: security_updates_needed | default(false)
+      register: yum_update_result
+      notify: Reboot required
+
+    - name: Notify if no security updates are required
+      debug:
+        msg: "No security updates needed."
+      when: not security_updates_needed | default(false)
+
+    - name: Check if reboot is required
+      shell: needs-restarting -r
+      register: reboot_required
+      failed_when: false  # Don't fail the task if needs-restarting is not available
+      ignore_errors: true
+
+    - name: Show reboot_required output
+      debug:
+        var: reboot_required
+
+    - name: Notify if reboot is required
+      debug:
+        msg: "Reboot is required on this server."
+      when: reboot_required.stdout is defined and 'Reboot is probably not necessary' not in reboot_required.stdout
+
+    - name: Notify if reboot is not required
+      debug:
+        msg: "Reboot not required for the server after verification."
+      when: reboot_required.stdout is defined and 'Reboot is probably not necessary' in reboot_required.stdout
+
+  handlers:
+    - name: Reboot required
+      debug:
+        msg: "Reboot has been triggered due to critical updates."
+
+[ansible.FAccount@scclhubansb01 Server_Patching]$
