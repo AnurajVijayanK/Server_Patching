@@ -1,0 +1,105 @@
+[ansible.FAccount@scclhubansb01 Server_Patching]$ cat check_security_and_reboot_status.yml
+---
+- name: Verify if any critical security patches are pending and notify if reboot is required
+  hosts: 10.38.132.231
+  become: true
+  tasks:
+
+    # Gather facts
+    - name: Gathering Facts
+      ansible.builtin.gather_facts:
+
+    # Verify if yum is installed
+    - name: Check if yum is installed
+      command: which yum
+      register: yum_installed
+      ignore_errors: true
+
+    # Verify if dnf is installed
+    - name: Check if dnf is installed
+      command: which dnf
+      register: dnf_installed
+      ignore_errors: true
+
+    # Fail if neither yum nor dnf is installed
+    - name: Fail if neither yum nor dnf is installed
+      fail:
+        msg: "Neither yum nor dnf is installed on this system. Please install one of them before proceeding."
+      when: yum_installed.rc != 0 and dnf_installed.rc != 0
+
+    # Check for pending security patches using yum (in background), only if yum is installed
+    - name: Check for pending security patches using yum
+      yum:
+        list: updates
+        security: yes
+      register: pending_patches_yum
+      ignore_errors: true  # Ignore errors in case there are no updates
+      when: yum_installed.rc == 0  # Only run this task if yum is installed
+
+    # Check for pending security patches using dnf (only if the plugin is available)
+    - name: Check for pending security patches using dnf
+      command: dnf updateinfo list security
+      register: pending_patches_dnf
+      async: 60
+      poll: 0
+      ignore_errors: true
+      when: dnf_installed.rc == 0  # Only run this task if dnf is installed
+
+    # Wait for yum check to finish (Only proceed if yum job ID is set)
+    - name: Wait for yum check to finish
+      async_status:
+        jid: "{{ pending_patches_yum.ansible_job_id }}"
+      register: yum_check_result
+      until: yum_check_result.finished
+      retries: 5  # Increased retries for better handling
+      delay: 15  # Increased delay for better completion time
+      when: pending_patches_yum.ansible_job_id is defined
+
+    # Wait for dnf check to finish (Only proceed if dnf job ID is set and dnf check was run)
+    - name: Wait for dnf check to finish
+      async_status:
+        jid: "{{ pending_patches_dnf.ansible_job_id }}"
+      register: dnf_check_result
+      until: dnf_check_result.finished
+      retries: 5
+      delay: 15
+      when: pending_patches_dnf is defined and pending_patches_dnf.ansible_job_id is defined
+
+    # Show pending security patches found by yum, only if yum check was successful and stdout is available
+    - name: Show pending security patches found by yum
+      debug:
+        msg: "Pending critical security patches (yum): {{ pending_patches_yum.stdout }}"
+      when: pending_patches_yum is defined and pending_patches_yum.stdout is defined and pending_patches_yum.stdout != ""
+
+    # Show pending security patches found by dnf, only if dnf check was successful and stdout is available
+    - name: Show pending security patches found by dnf
+      debug:
+        msg: "Pending critical security patches (dnf): {{ pending_patches_dnf.stdout }}"
+      when: pending_patches_dnf is defined and pending_patches_dnf.stdout is defined and pending_patches_dnf.stdout != ""
+
+    # If no patches were found, notify that system is up to date
+    - name: Notify that the system is up to date (no patches)
+      debug:
+        msg: "No critical security patches are pending. System is up-to-date."
+      when: (pending_patches_yum.stdout is not defined or pending_patches_yum.stdout == "") and (pending_patches_dnf.stdout is not defined or pending_patches_dnf.stdout == "")
+
+    # Check if reboot is required after patching (if there are patches)
+    - name: Check if reboot is required after patching using dnf
+      command: needs-restarting -r
+      register: reboot_check
+      ignore_errors: true
+      when: (pending_patches_yum.stdout is defined and pending_patches_yum.stdout != "") or (pending_patches_dnf.stdout is defined and pending_patches_dnf.stdout != "")
+
+    # Report reboot status, only if reboot_check is defined and has stdout
+    - name: Report reboot status
+      debug:
+        msg: "Reboot required after patching: {{ reboot_check.stdout }}"
+      when: reboot_check is defined and reboot_check.stdout is defined and reboot_check.stdout != ""
+
+    # If reboot is not required, notify accordingly
+    - name: Notify if reboot is not required
+      debug:
+        msg: "No reboot required after patching."
+      when: reboot_check is not defined or reboot_check.stdout is not defined or reboot_check.stdout == ""
+
+[ansible.FAccount@scclhubansb01 Server_Patching]$
