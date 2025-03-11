@@ -1,0 +1,23 @@
+[ansible.FAccount@scclhubansb01 Server_Patching]$ cat Server_Health_Free_Disk_Space.yml
+---
+- name: Verify Server Health and Free Disk Space
+  hosts: ZabbixServers
+  remote_user: ansible.FAccount
+  become: true
+  become_method: sudo
+  become_user: root
+  tasks:
+    - name: Check Disk Usage
+      command: df -h
+      register: disk_usage
+
+    - debug:
+        var: disk_usage.stdout_lines
+
+    - name: Print Disks with Usage >= 85%
+      debug:
+        msg: "Server: {{ ansible_hostname }} - Disk: {{ item }}"
+      loop: "{{ disk_usage.stdout_lines[1:] }}"
+      when: item.split()[4] | int >= 85
+
+[ansible.FAccount@scclhubansb01 Server_Patching]$
