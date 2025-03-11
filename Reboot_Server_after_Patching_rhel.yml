@@ -1,0 +1,24 @@
+[ansible.FAccount@scclhubansb01 Server_Patching]$ cat Reboot_Server_after_Patching_rhel.yml
+---
+- name: Reboot and Check Server Online
+  hosts: ZabbixServers
+  remote_user: ansible.FAccount
+  become: true
+  become_method: sudo
+  become_user: root
+  gather_facts: yes
+  tasks:
+    - name: Reboot server
+      reboot:
+        reboot_timeout: 300
+        test_command: uptime
+
+    - name: Wait for server to come back online
+      wait_for_connection:
+        delay: 10
+        timeout: 300
+
+    - name: Confirm server is online
+      ping:
+
+[ansible.FAccount@scclhubansb01 Server_Patching]$
