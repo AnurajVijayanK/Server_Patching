@@ -1,0 +1,40 @@
+[ansible.FAccount@scclhubansb01 ansibleplaybook]$ cat Basic_Pkgs_Installation_TrobleshootRhel.yml
+---
+- hosts: all
+  remote_user: ansible.FAccount
+  become: true
+  become_method: sudo
+  become_user: root
+  ignore_errors: yes
+  tasks:
+    - name: Install basic packages for trobleshoot and monitor
+      command: "{{ item.cmd }}"
+      with_items:
+      - { cmd: ' sudo yum install cloud-utils-growpart -y ' }
+      - { cmd: ' sudo yum install traceroute -y ' }
+      - { cmd: ' sudo yum install telnet -y ' }
+      - { cmd: ' sudo yum install sg3_utils -y ' }
+      - { cmd: ' sudo yum install sysstat -y ' }
+      - { cmd: ' sudo yum install htop -y ' }
+[ansible.FAccount@scclhubansb01 ansibleplaybook]$
+[ansible.FAccount@scclhubansb01 ansibleplaybook]$
+[ansible.FAccount@scclhubansb01 ansibleplaybook]$ cat BasicPkgsInstallationTrobleshootRhel.yml
+---
+- hosts: 10.63.2.203
+  remote_user: ansible.FAccount
+  become: true
+  become_method: sudo
+  become_user: root
+  ignore_errors: yes
+  tasks:
+    - name: Install basic packages for trobleshoot and monitor
+      command: "{{ item.cmd }}"
+      with_items:
+      - { cmd: ' sudo yum install cloud-utils-growpart -y ' }
+      - { cmd: ' sudo yum install traceroute -y ' }
+      - { cmd: ' sudo yum install nmap -y ' }
+      - { cmd: ' sudo yum install telnet -y ' }
+      - { cmd: ' sudo yum install sg3_utils -y ' }
+      - { cmd: ' sudo yum install sysstat -y ' }
+      - { cmd: ' sudo yum install htop -y ' }
+[ansible.FAccount@scclhubansb01 ansibleplaybook]$
