@@ -1,0 +1,79 @@
+
+[ansible.FAccount@scclhubansb01 ansibleplaybook]$ cat  satellite-server.yml
+---
+- name: Unregister system, clean up, and perform Satellite setup
+  hosts: 10.35.132.202
+  remote_user: ansible.FAccount
+  become: yes
+  tasks:
+
+    - name: Unregister system if already registered
+      ansible.builtin.command: subscription-manager unregister
+      ignore_errors: yes  # Ignoring errors if not previously registered
+
+    - name: Clean up subscription-manager configuration
+      ansible.builtin.command: subscription-manager clean
+      ignore_errors: yes  # Ignore errors if no configuration to clean up
+
+    - name: Download katello-ca-consumer package
+      ansible.builtin.get_url:
+        url: "http://scclhubrhpm01.stadiums.hostcountry.qa/pub/katello-ca-consumer-latest.noarch.rpm"
+        dest: "/tmp/katello-ca-consumer-latest.noarch.rpm"
+
+    - name: Install katello-ca-consumer package
+      ansible.builtin.yum:
+        name: "/tmp/katello-ca-consumer-latest.noarch.rpm"
+        state: present
+      ignore_errors: yes
+
+    - name: Register system with username and password
+      ansible.builtin.command: >
+        subscription-manager register
+        --username=anurXXXXX
+        --password=XXXXXXXX
+        --force
+      ignore_errors: yes  # System might already be registered
+
+    - name: Gather facts about the system
+      ansible.builtin.setup:
+        gather_subset: all
+      register: system_facts
+
+    - name: Display OS version
+      debug:
+        var: ansible_distribution + " " + ansible_distribution_version + " (" + ansible_distribution_release + ")"
+
+    - name: Enable repositories for RHEL 8
+      ansible.builtin.command: >
+        subscription-manager repos
+        --enable=rhel-8-server-rpms
+        --enable=rhel-8-server-satellite-tools-6.9-rpms
+      when: "'RedHat' in ansible_facts['ansible_distribution'] and ansible_facts['ansible_distribution_release'] == '8'"
+      ignore_errors: yes
+
+    - name: Enable repositories for RHEL 7
+      ansible.builtin.command: >
+        subscription-manager repos
+        --enable=rhel-7-server-rpms
+        --enable=rhel-7-server-satellite-tools-6.9-rpms
+      when: "'RedHat' in ansible_facts['ansible_distribution'] and ansible_facts['ansible_distribution_release'] == '7'"
+      ignore_errors: yes
+
+    - name: Enable repositories for RHEL 9
+      ansible.builtin.command: >
+        subscription-manager repos
+        --enable=rhel-9-server-rpms
+        --enable=rhel-9-server-satellite-tools-6.9-rpms
+      when: "'RedHat' in ansible_facts['ansible_distribution'] and ansible_facts['ansible_distribution_release'] == '9'"
+      ignore_errors: yes
+
+    - name: Display registration status
+      ansible.builtin.command: subscription-manager status
+      register: registration_status
+      changed_when: false  # Avoid showing this command as a "changed" operation
+
+    - name: Display registration status output
+      debug:
+        var: registration_status.stdout_lines
+
+[ansible.FAccount@scclhubansb01 ansibleplaybook]$
